@@ -38,6 +38,52 @@ namespace GAlg
             throw std::bad_alloc();
         }
 
+        // WARNING: there are no safe guards when working with free blocks. Any unexpected
+        // call to deallocate will cause UB
+        void deallocate(T* ptr, size_t size)
+        {
+            size_t targetBlockStart = reinterpret_cast<char*>(ptr) - memory.data();
+            size_t targetBlockSize = size;
+
+            // Search if we have another free block BEFORE the current one
+            for (auto block : freeBlocks)
+            {
+                std::size_t blockStart = block.first;
+                std::size_t blockSize = block.second;
+
+                if (blockStart > targetBlockStart)
+                    break;
+
+                if (blockStart + blockSize == targetBlockStart - 1)
+                {
+                    // Merge free blocks and delete the old one
+                    targetBlockStart = blockStart;
+                    targetBlockSize += blockSize;
+                    freeBlocks.erase(blockStart);
+                    break;
+                }
+            }
+
+            // Search if we have another free block AFTER the current one
+            for (auto block : freeBlocks)
+            {
+                std::size_t blockStart = block.first;
+                std::size_t blockSize = block.second;
+
+                if (blockStart == targetBlockStart + targetBlockSize)
+                {
+                    // Merge free blocks and delete the old one
+                    targetBlockSize += blockSize;
+                    freeBlocks.erase(blockStart);
+                }
+                else if (blockStart > targetBlockStart + targetBlockSize)
+                    break;
+            }
+
+            // Add new free block
+            freeBlocks[targetBlockStart] = targetBlockSize;
+        }
+
     private:
         std::array<char, Size> memory;
 
